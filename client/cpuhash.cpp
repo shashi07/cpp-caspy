@@ -9,36 +9,16 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
-#define PACKET_SIZE 4*1024
-#define BUFLEN 500* PACKET_SIZE
+#include "gpuhash.h"
+#include "threaddata.h"
+#define PACKET_SIZE (4*1024)
+#define BUFLEN (500* 1024*1024)
 
 using namespace std;
 using namespace sha1;
 
 // Data structure to be passed as an argument to calc threads.
-struct thread_data_t {
-  char *data;
-  int start;
-  int len;
-  unsigned char hash[20];
-} ;
 
-// Data structure to be passed as an argument to Sender threads.
-struct Send_data_t
-{
-
-    thread_data_t *data;
-    int blocks;
-    Sender *s;
-
-    Send_data_t(int iblocks,thread_data_t *d,Sender *t)
-    {
-        blocks = iblocks;
-        data = d;
-        s=t;
-    }
-};
 
 /* Thread function to send blocks  to server */
 void *send_blocks(void *arg) {
@@ -59,9 +39,10 @@ void *send_blocks(void *arg) {
     BlockInfo obj(iseq, isize, ihash_val,iblock_data);
     blocks->s->send(obj);
     blocks->s->send((const char*)blocks->data[i].data,blocks->data[i].len);
-
   }
+  cout<<"Exiting send function"<<endl;
   blocks->s->send("DONE");
+  cout<<"Exiting send function";
   pthread_exit(NULL);
 }
 
@@ -101,9 +82,6 @@ int readFile(char* filename, unsigned char * &buffer,int &charRead,int offset=0)
 			cout<<l<<endl;
             //buffer = (unsigned char *)malloc((l)*sizeof(unsigned char));
             buffer = new unsigned char[l];
-
-			buffer[0]='S';
-			buffer[l-1] = 'B';
         }
         
 
@@ -127,11 +105,62 @@ std::string SplitFilename (const std::string& str)
   return str.substr(found+1);
 }
 
+
+int calc_cpu(unsigned char *data1, int charRead, thread_data_t * &t)
+{
+    int rc;
+    char hash[41];
+    int blocks = charRead/(PACKET_SIZE);
+        int remainder = charRead % (PACKET_SIZE);
+        if ( remainder )
+            blocks++;
+        t = new thread_data_t[blocks];
+        
+        int no_of_thread_blocks = blocks/300;
+        int remainders = blocks%300;
+        if (remainders)
+            no_of_thread_blocks++;
+        cout<<no_of_thread_blocks <<" " <<remainders<<endl;
+        pthread_t *calculator = new pthread_t[blocks];
+        
+        for(int b=0;b<no_of_thread_blocks;b++){
+            int limit = 300;
+            if(b==no_of_thread_blocks-1)
+                limit = remainders;
+            for (int i=b*300;i<(b*300+limit);i++){
+                int len = PACKET_SIZE;
+                if (i== blocks-1)
+                    len = remainder;
+                t[i].data = new char[len];
+                memcpy ( t[i].data, &data1[i*PACKET_SIZE], len);
+                t[i].len = len;
+                if ((rc = pthread_create(&calculator[i], NULL, calc_hash_thread, &t[i]))) {
+                        fprintf(stderr, "error: pthread_create, rc: %d\n", rc);
+                        return EXIT_FAILURE;
+                    }
+            }
+              
+            for (int i = b*300; i < (b*300+limit); ++i) {
+                pthread_join(calculator[i], NULL);
+            }
+            
+        }
+          for (int i = 0; i < blocks; ++i) {
+            toHexString(t[i].hash,hash);
+            cout<<i<<" "<<hash<<endl;
+        }
+
+        return blocks;
+          
+}
+
 int main(int argc, char **argv)
 {
 
     if(argc != 2)    
         return 1;
+    clock_t start, end;
+     double cpu_time_used;
 
     int file=0;
     if((file=open(argv[1],O_RDONLY)) < -1)
@@ -142,6 +171,7 @@ int main(int argc, char **argv)
         return 1;
 
     close(file);
+
      //   FileInfo(std:string fname,uint32 isize,uint32 iatime,uint32 imtime, uint32 ictime,uint32 imode,uint32 iuid, uint32 gid);
     unsigned char *data1=NULL;
     int charRead,offset=0,retStatus,rc;
@@ -156,6 +186,7 @@ int main(int argc, char **argv)
     s.send("POST");
     s.send(f);
 
+    thread_data_t *t;
 
     while(1){
 
@@ -164,46 +195,36 @@ int main(int argc, char **argv)
         if (retStatus == -1 || retStatus == 1)
             break;
         cout<<"aa gaya";
-        int blocks = charRead/(PACKET_SIZE);
-        int remainder = charRead % (PACKET_SIZE);
-        if ( remainder )
-            blocks++;
-        thread_data_t *t = new thread_data_t[blocks];
-        pthread_t *calculator = new pthread_t[blocks];
-        for (int i=0;i<blocks;i++){
-            int len = PACKET_SIZE;
-            if (i== blocks-1)
-                len = remainder;
-            t[i].data = new char[len];
-            memcpy ( t[i].data, &data1[i*PACKET_SIZE], len);
-            t[i].len = len;
-            if ((rc = pthread_create(&calculator[i], NULL, calc_hash_thread, &t[i]))) {
-					fprintf(stderr, "error: pthread_create, rc: %d\n", rc);
-					return EXIT_FAILURE;
-				}
-		}
-		  for (int i = 0; i < blocks; ++i) {
-			pthread_join(calculator[i], NULL);
-		}
-		
-		
-		  for (int i = 0; i < blocks; ++i) {
-			toHexString(t[i].hash,hash);
-			cout<<i<<" "<<hash<<endl;
-		}
-		
-		delete data1;
+        cout<< charRead<<endl;
+        //int blocks = calc_gpu(data1,charRead,t);
 
-    cout<<"Creating Sender thread"<<endl;
-   
-    Send_data_t senddata(blocks,t,&s);
+        start = clock();
+        int blocks = calc_cpu(data1,charRead,t);
+        end = clock();
+
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+        cout<<"Time taken CPU : " << cpu_time_used;
+        cout << blocks << endl;
+        Send_data_t senddata(blocks,t,&s);
+        cout<<"Creating Sender thread"<<endl;
 
     if ((rc = pthread_create(&sender, NULL, send_blocks, &senddata))) {
             fprintf(stderr, "error: pthread_create, rc: %d\n", rc);
             return EXIT_FAILURE;
         }
 
-    pthread_join(sender, NULL);
+     pthread_join(sender, NULL);
+ 
+     cout<<retStatus;
+
+        delete[] data1; 
+        for(int i=0;i<blocks;i++)
+        {
+                delete[] t[i].data;
+
+        }
+
+        delete[] t;
         if(retStatus==1)
             break;
     }

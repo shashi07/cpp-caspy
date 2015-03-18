@@ -36,3 +36,7 @@ while True:
         print len(data)
         dbconnect.insert_in_data_blocks(inode,seq=file_info_dict['seq'],hash_val= data)
         print file_info_dict['seq']
+      
+  tcpTimeClientSock.close()
+
+tcpTimeSrvrSock.close()
