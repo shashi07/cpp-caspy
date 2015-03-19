@@ -34,7 +34,15 @@ while True:
         file_info_dict = json.loads(file_info)
         data = srfunc.recv_msg(tcpTimeClientSock)
         print len(data)
-        dbconnect.insert_in_data_blocks(inode,seq=file_info_dict['seq'],hash_val= data)
+        #dbconnect.insert_in_data_blocks(inode,seq=file_info_dict['seq'],hash_val= data)
+        h_id = dbconnect.check_in_hashes(file_info_dict['hash_val'])
+        if h_id == -1 :
+          print 'creating block'
+          h_id = dbconnect.insert_in_hashes(hash_val=file_info_dict['hash_val'],size=file_info_dict['size'],data=data)
+        else :
+          print 'block exists using that.'
+        dbconnect.insert_in_db_hash(inode,seq=file_info_dict['seq'],hash_id = h_id)
+        
         print file_info_dict['seq']
       
   tcpTimeClientSock.close()

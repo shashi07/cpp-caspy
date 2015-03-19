@@ -19,7 +19,7 @@ using namespace sha1;
 
 // Data structure to be passed as an argument to calc threads.
 
-
+timespec diff(timespec start, timespec end);
 /* Thread function to send blocks  to server */
 void *send_blocks(void *arg) {
   Send_data_t *blocks = (Send_data_t *)arg;
@@ -157,13 +157,13 @@ int calc_cpu(unsigned char *data1, int charRead, thread_data_t * &t)
 int main(int argc, char **argv)
 {
 
-    if(argc != 2)    
+    if(argc != 3)    
         return 1;
     clock_t start, end;
      double cpu_time_used;
 
     int file=0;
-    if((file=open(argv[1],O_RDONLY)) < -1)
+    if((file=open(argv[2],O_RDONLY)) < -1)
         return 1;
  
     struct stat fileStat;
@@ -179,7 +179,7 @@ int main(int argc, char **argv)
     pthread_t calculator, sender;
     Sender s("localhost","28812");
     s.create_socket();
-    std::string filename =  argv[1];
+    std::string filename =  argv[2];
 
     FileInfo f( SplitFilename(filename) , (uint32_t)fileStat.st_size, (uint32_t)fileStat.st_atime,
      (uint32_t)fileStat.st_mtime, (uint32_t)fileStat.st_ctime, (uint32_t)fileStat.st_mode, (uint32_t)fileStat.st_uid, (uint32_t)fileStat.st_gid);
@@ -190,20 +190,34 @@ int main(int argc, char **argv)
 
     while(1){
 
-        retStatus = readFile(argv[1],data1,charRead,offset);
+        retStatus = readFile(argv[2],data1,charRead,offset);
         offset+= charRead;
         if (retStatus == -1 || retStatus == 1)
             break;
         cout<<"aa gaya";
         cout<< charRead<<endl;
-        //int blocks = calc_gpu(data1,charRead,t);
 
-        start = clock();
-        int blocks = calc_cpu(data1,charRead,t);
-        end = clock();
+        int blocks;
+        if (strcmp(argv[1],"-g")==0){
+            cout<<"GPU"<<endl;
+            blocks = calc_gpu(data1,charRead,t);
+        }
+        else if (strcmp(argv[1],"-c")==0){
+            cout<<"CPU"<<endl;
+                timespec time1, time2;
 
-        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-        cout<<"Time taken CPU : " << cpu_time_used;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time1);
+            blocks = calc_cpu(data1,charRead,t);
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time2);
+
+        cout<<"Time taken CPU : "<<diff(time1,time2).tv_sec<<"s :"<<diff(time1,time2).tv_nsec<<"ns"<<endl;
+        
+        }
+        else {
+            delete[] data1;
+            break;
+
+        }
         cout << blocks << endl;
         Send_data_t senddata(blocks,t,&s);
         cout<<"Creating Sender thread"<<endl;
@@ -231,4 +245,17 @@ int main(int argc, char **argv)
 
     printf("Completed");
     return 1;
+}
+
+timespec diff(timespec start, timespec end)
+{
+    timespec temp;
+    if ((end.tv_nsec-start.tv_nsec)<0) {
+        temp.tv_sec = end.tv_sec-start.tv_sec-1;
+        temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec-start.tv_sec;
+        temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+    }
+    return temp;
 }

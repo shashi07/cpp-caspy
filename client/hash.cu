@@ -237,6 +237,7 @@ int calc_gpu(unsigned char *data1, int charRead, thread_data_t * &t)
         {
             if(i==threads-1){
                 len = remainders;
+                sha1::calc(&data1[i*PACKET_SIZE],len,&hash_host[i*20]);
                 cout<<"len :"<<len<<endl;
             }
             t[i].data = new char[len];

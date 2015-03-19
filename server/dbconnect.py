@@ -5,7 +5,8 @@ def runquery(query,insert=False) :
     
     try :
 	# host,db_username,db_password,dbname
-        con = d=mdb.connect('localhost','caspy','caspy','caspy')
+        #con = d=mdb.connect('localhost','caspy','caspy','caspy')
+        con = d=mdb.connect('localhost','root','dexter88','mysqlfs')
         cur = con.cursor()
         #print query
         cur.execute(query)
@@ -14,7 +15,7 @@ def runquery(query,insert=False) :
         else :
         	a = cur.fetchall()
     except mdb.Error, e :
-        a = -1
+        a = ()
         print e
     finally :
         if con :
@@ -27,7 +28,7 @@ def runquerybin(query,inode,seq,hash_val,insert=False) :
     
     try :
     # host,db_username,db_password,dbname
-        con = d=mdb.connect('localhost','caspy','caspy','caspy')
+        con = d=mdb.connect('localhost','root','dexter88','mysqlfs')
         cur = con.cursor()
         #print query
         cur.execute(query,(inode,seq,hash_val))
@@ -36,7 +37,7 @@ def runquerybin(query,inode,seq,hash_val,insert=False) :
         else :
             a = cur.fetchall()
     except mdb.Error, e :
-        a = -1
+        a = ()
         print e
     finally :
         if con :
@@ -55,6 +56,22 @@ def fill_inode_data(inode,mode,uid,gid,atime,mtime,ctime,size):
 def insert_in_data_blocks(inode,seq,hash_val):
     query = """insert into data_blocks(inode,seq,data) values (%s,%s,%s);"""
     return runquerybin(query,int(inode),int(seq),hash_val)
+
+def insert_in_db_hash(inode,seq,hash_id):
+
+    query = """insert into data_blocks(inode,seq,hash_id) values (%s,%s,%s);"""
+    return runquerybin(query,int(inode),int(seq),int(hash_id))
+
+def insert_in_hashes(hash_val,size,data):
+    query = """insert into hashes(hash,size,data) values (%s,%s,%s);"""
+    return runquerybin(query,hash_val,size,data,insert=True)
+
+def check_in_hashes(hash_val) :
+    query = """select hash_id from hashes where hash = "%s";"""%(hash_val,)
+    a = runquery(query)
+    if (len(a)==0) :
+        return -1 ;
+    return a[0][0]
 
 '''
 def insertInDir(dname,pdname,user) :
