@@ -145,11 +145,14 @@ int calc_cpu(unsigned char *data1, int charRead, thread_data_t * &t)
             }
             
         }
+
+        delete[] calculator;
+        /*
           for (int i = 0; i < blocks; ++i) {
             toHexString(t[i].hash,hash);
             cout<<i<<" "<<hash<<endl;
         }
-
+        */
         return blocks;
           
 }
@@ -226,9 +229,9 @@ int main(int argc, char **argv)
             fprintf(stderr, "error: pthread_create, rc: %d\n", rc);
             return EXIT_FAILURE;
         }
-
+   
      pthread_join(sender, NULL);
- 
+     
      cout<<retStatus;
 
         delete[] data1; 

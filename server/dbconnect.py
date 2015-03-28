@@ -6,7 +6,7 @@ def runquery(query,insert=False) :
     try :
 	# host,db_username,db_password,dbname
         #con = d=mdb.connect('localhost','caspy','caspy','caspy')
-        con = d=mdb.connect('localhost','root','dexter88','mysqlfs')
+        con = mdb.connect('localhost','root','dexter88','intmysql')
         cur = con.cursor()
         #print query
         cur.execute(query)
@@ -24,11 +24,59 @@ def runquery(query,insert=False) :
     return a
 
 
+
+def opencon(hostname,db_user,db_password,database):
+    try :
+        con = mdb.connect('localhost','root','dexter88','intmysql')
+    except mdb.Error, e :
+        raise e
+    return con
+
+def query_run(insert=False,con,query,*argv) :
+    cur = con.cursor()
+    param = [arg for arg in argv]
+    param = tuple(param)
+    try :
+        cur.execute(query,param)
+        if insert :
+            a = cur.lastrowid
+        else :
+            a = cur.fetchall()
+    except mdb.Error,e :
+        a = ()
+    cur.close()
+    return a
+
+
+def insert_hash(con,hash_val,size,data) :
+    query = """insert IGNORE into hashes(hash,size,data) values (%s,%s,%s);"""
+    cur = con.cursor()
+    try:
+        cur.execute(query,(hash_val,size,data))
+        if cur.lastrowid:
+            a = cur.lastrowid
+        else :
+            query = """select hash_id from hashes where hash = "%s";"""%
+            cur.execute(query,(hash_val,))
+            a=cur.fetchall()
+            a = a[0][0]
+    except mdb.Error,e:
+        raise e
+    cur.close()
+    return a
+
+def closecon(con):
+    try:
+        con.commit()
+        con.close()
+    except mdb.Error, e:
+        raise e
+
 def runquerybin(query,inode,seq,hash_val,insert=False) :
     
     try :
     # host,db_username,db_password,dbname
-        con = d=mdb.connect('localhost','root','dexter88','mysqlfs')
+        con = d=mdb.connect('localhost','root','dexter88','intmysql')
         cur = con.cursor()
         #print query
         cur.execute(query,(inode,seq,hash_val))
@@ -36,6 +84,24 @@ def runquerybin(query,inode,seq,hash_val,insert=False) :
             a = cur.lastrowid
         else :
             a = cur.fetchall()
+    except mdb.Error, e :
+        a = ()
+        print e
+    finally :
+        if con :
+            con.commit()
+            con.close()
+    return a
+
+def checkHash(query,hash_val) :
+    
+    try :
+    # host,db_username,db_password,dbname
+        con = d=mdb.connect('localhost','root','dexter88','intmysql')
+        cur = con.cursor()
+        #print query
+        cur.execute(query,(hash_val,))
+        a = cur.fetchall()
     except mdb.Error, e :
         a = ()
         print e
@@ -60,7 +126,7 @@ def insert_in_data_blocks(inode,seq,hash_val):
 def insert_in_db_hash(inode,seq,hash_id):
 
     query = """insert into data_blocks(inode,seq,hash_id) values (%s,%s,%s);"""
-    return runquerybin(query,int(inode),int(seq),int(hash_id))
+    return runquerybin(query,int(inode),int(seq),hash_id)
 
 def insert_in_hashes(hash_val,size,data):
     query = """insert into hashes(hash,size,data) values (%s,%s,%s);"""
@@ -69,6 +135,13 @@ def insert_in_hashes(hash_val,size,data):
 def check_in_hashes(hash_val) :
     query = """select hash_id from hashes where hash = "%s";"""%(hash_val,)
     a = runquery(query)
+    if (len(a)==0) :
+        return -1 ;
+    return a[0][0]
+
+def check_in_hashesbin(hash_val) :
+    query = """select hash_id from hashes where hash = %s;"""
+    a = checkHash(query,hash_val)
     if (len(a)==0) :
         return -1 ;
     return a[0][0]

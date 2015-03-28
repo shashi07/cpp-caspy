@@ -244,11 +244,11 @@ int calc_gpu(unsigned char *data1, int charRead, thread_data_t * &t)
             memcpy ( t[i].data, &data1[i*PACKET_SIZE], len);
             t[i].len = len;
             memcpy ( t[i].hash, &hash_host[i*20], 20);
-            
+            /*
             cout<<"Hash :";
         	for(int j=0;j<20;j++)
         		printf("%02x",hash_host[i*20+j]);
-            cout<<endl;
+            cout<<endl; */
         }
 
         delete[] hash_host;
